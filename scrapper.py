@@ -1,3 +1,4 @@
+import os
 import argparse
 import requests
 import json
@@ -88,8 +89,8 @@ def writeData(output, type, data):
         else:
             throwError("Неподдерживаемый тип выходного файла")
 
-    print(f"[✅] Данные успешно записаны в файл {output}\n" \
-          f"Всего {len(data["playlist"]["tracks"])} песен")
+        print(f"[✅] Данные успешно записаны в файл '{os.path.realpath(f.name)}'\n" \
+            f"[✅] Всего {len(data["playlist"]["tracks"])} песен")
 
 
 def main():
