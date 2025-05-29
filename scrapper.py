@@ -5,6 +5,7 @@ import json
 from art import tprint
 from termcolor import colored
 from tqdm import tqdm
+from bs4 import BeautifulSoup
 
 
 def throwError(err_message):
@@ -44,10 +45,46 @@ def parseArguments():
     return parser.parse_args()
 
 
+def scrapPlaylists(username):
+    url = f"https://music.yandex.ru/users/{username}/playlists"
+    print("[⏰] Сбор плейлистов...")
+
+    response = requests.get(url, cookies={"prevent_next_web": "true"})
+    response.encoding = "UTF-8"
+    if response.status_code == 404:
+        throwError("Ошибка! Пользователь не найден!")
+    elif response.status_code != 200:
+        throwError(f"Произошла ошибка при сборе плейлистов пользователя. Код ошибки: {response.status_code}")
+    with open("index.html", "w", encoding="utf-8") as f:
+        f.write(response.text)
+
+    soup = BeautifulSoup(response.text, "html.parser")
+
+    script_data = soup.find("body").find("script")
+    dict_data = json.loads(script_data.text.split("=")[1][:-1]) # срез данных
+    uid = dict_data['pageData']['owner']['uid']
+    playlists = dict_data['pageData']['playlistIds']
+    print(f"Найдено {len(playlists)} плейлистов")
+
+    playlists_url = f"https://music.yandex.ru/handlers/playlists-list.jsx?owner={uid}&ids={str(playlists).replace('[', '').replace(']', '').replace(' ', '')}"
+    playlists_name = requests.get(playlists_url).json()
+    for i in range(len(playlists_name)):
+        print(i+1, "--->", playlists_name[i]['title'])
+
+    try:
+        selected_playlist = int(input("Выберите один из плейлистов: ")) - 1
+        if selected_playlist < 0 or selected_playlist > len(playlists_name) - 1:
+            throwError("Ошибка! Введено число вне диапазона")
+    except ValueError:
+        throwError("Ошибка! Ввеедено не число")
+    return f"https://music.yandex.ru/handlers/playlist.jsx?owner={username}&kinds={playlists_name[selected_playlist]['kind']}"
+
+
+
 def scrapData(username, user_url):
     print("[⏰] Формирование ссылки...")
     if username:
-        link = f"https://music.yandex.ru/handlers/playlist.jsx?owner={username}&kinds=3"
+        link = scrapPlaylists(username)
     else:
         if not user_url.startswith("https://music.yandex.ru/users/"):
             throwError("Ой! Кажется это не ссылка на плейлист Яндекс.Музыки!")
