@@ -5,7 +5,6 @@ import json
 from art import tprint
 from termcolor import colored
 from tqdm import tqdm
-from bs4 import BeautifulSoup
 
 
 def throwError(err_message):
@@ -21,6 +20,8 @@ def parseArguments():
     parser.add_argument("-h", "--help",
                         help="Справка по программе",
                         action="help")
+
+    # TODO: статистика по исполнителям из плейлиста
 
     # Группа
     user_group = parser.add_mutually_exclusive_group(required=True)
@@ -46,38 +47,30 @@ def parseArguments():
 
 
 def scrapPlaylists(username):
-    url = f"https://music.yandex.ru/users/{username}/playlists"
+    url = f"https://api.music.yandex.net/users/{username}/playlists/list"
     print("[⏰] Сбор плейлистов...")
 
-    response = requests.get(url, cookies={"prevent_next_web": "true"})
-    response.encoding = "UTF-8"
-    if response.status_code == 404:
-        throwError("Ошибка! Пользователь не найден!")
-    elif response.status_code != 200:
-        throwError(f"Произошла ошибка при сборе плейлистов пользователя. Код ошибки: {response.status_code}")
-    with open("index.html", "w", encoding="utf-8") as f:
-        f.write(response.text)
+    response = requests.get(url).json()
+    # if response.status_code == 404:
+    #     throwError("Ошибка! Пользователь не найден!")
+    # elif response.status_code != 200:
+    #     throwError(f"Произошла ошибка при сборе плейлистов пользователя. Код ошибки: {response.status_code}")
 
-    soup = BeautifulSoup(response.text, "html.parser")
-
-    script_data = soup.find("body").find("script")
-    dict_data = json.loads(script_data.text.split("=")[1][:-1]) # срез данных
-    uid = dict_data['pageData']['owner']['uid']
-    playlists = dict_data['pageData']['playlistIds']
+    playlists = response['result']
     print(f"Найдено {len(playlists)} плейлистов")
 
-    playlists_url = f"https://music.yandex.ru/handlers/playlists-list.jsx?owner={uid}&ids={str(playlists).replace('[', '').replace(']', '').replace(' ', '')}"
-    playlists_name = requests.get(playlists_url).json()
-    for i in range(len(playlists_name)):
-        print(i+1, "--->", playlists_name[i]['title'])
+    playlists_name = [x['title'] for x in playlists]
+    for i, name in enumerate(playlists_name, start=1):
+        print(i, "--->", name)
 
     try:
         selected_playlist = int(input("Выберите один из плейлистов: ")) - 1
-        if selected_playlist < 0 or selected_playlist > len(playlists_name) - 1:
+        if selected_playlist < 1 or selected_playlist > len(playlists_name):
             throwError("Ошибка! Введено число вне диапазона")
+        playlist_kinds = playlists[selected_playlist]['kind']
     except ValueError:
         throwError("Ошибка! Ввеедено не число")
-    return f"https://music.yandex.ru/handlers/playlist.jsx?owner={username}&kinds={playlists_name[selected_playlist]['kind']}"
+    return f"https://music.yandex.ru/handlers/playlist.jsx?owner={username}&kinds={playlist_kinds}"
 
 
 
@@ -112,14 +105,16 @@ def scrapData(username, user_url):
 def writeData(output, type, data):
     print("[⏰] Обработка данных")
     with open(output, "w", encoding="UTF-8") as f:
-        if type == "json":
-            lines = {}
-            json.dump(data, f, ensure_ascii=False, indent=4)
-        elif type == "txt":
+        if type == "json" or output.endswith(".json"):
+            lines = []
+            for track in tqdm(data["playlist"]["tracks"]):
+                lines.append({track["artists"][0]["name"]: track["title"]})
+            json.dump(lines, f, ensure_ascii=False, indent=4)
+        elif type == "txt" or output.endswith(".txt"):
             lines = [track["title"] + " – " + track["artists"][0]["name"]
                      for track in tqdm(data["playlist"]["tracks"])]
             f.write("\n".join(lines))
-        elif type == "csv":
+        elif type == "csv" or output.endswith(".csv"):
             lines = ["\"" + track["title"] + "\",\"" + track["artists"][0]["name"] + "\""
                      for track in tqdm(data["playlist"]["tracks"])]
             f.write("name,artist\n" + "\n".join(lines))
