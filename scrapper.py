@@ -51,12 +51,17 @@ def scrapPlaylists(username):
     print("[⏰] Сбор плейлистов...")
 
     response = requests.get(url).json()
+    # TODO
     # if response.status_code == 404:
     #     throwError("Ошибка! Пользователь не найден!")
     # elif response.status_code != 200:
     #     throwError(f"Произошла ошибка при сборе плейлистов пользователя. Код ошибки: {response.status_code}")
 
     playlists = response['result']
+    if 'result' in requests.get(f"https://api.music.yandex.net/users/{username}/playlists/3").json():
+        playlists.append({"title": "Мне нравится",
+                          "kind": 3})
+
     print(f"Найдено {len(playlists)} плейлистов")
 
     playlists_name = [x['title'] for x in playlists]
@@ -65,7 +70,7 @@ def scrapPlaylists(username):
 
     try:
         selected_playlist = int(input("Выберите один из плейлистов: ")) - 1
-        if selected_playlist < 1 or selected_playlist > len(playlists_name):
+        if selected_playlist < 0 or selected_playlist > len(playlists_name):
             throwError("Ошибка! Введено число вне диапазона")
         playlist_kinds = playlists[selected_playlist]['kind']
     except ValueError:
